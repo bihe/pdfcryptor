@@ -30,20 +30,21 @@ func ChangePass(basePath, pdf1, pass1, pdf2, pass2 string, utilType config.PdfUt
 	var file, dir string
 
 	if file, dir, err = decrypt(pdf1, pass1, utilType); err != nil {
-		cleanUpErr := os.RemoveAll(dir) // silently clean up
-		if cleanUpErr != nil {
-			fmt.Printf("Could not clean-up dir %s. Error: %s", dir, cleanUpErr)
-		}
+		cleanUp(dir)
 		return "", err
 	}
 	if err := encrypt(dir, file, pdf2, pass2, utilType); err == nil {
-		// cleanup
-		if cleanUpErr := os.RemoveAll(dir); cleanUpErr != nil {
-			fmt.Printf("Could not clean-up dir %s. Error: %s", dir, cleanUpErr)
-		}
+		cleanUp(dir)
 		return pdf2, nil
 	}
+	cleanUp(dir)
 	return "", err
+}
+
+func cleanUp(dir string) {
+	if cleanUpErr := os.RemoveAll(dir); cleanUpErr != nil {
+		fmt.Printf("Could not clean-up dir %s. Error: %s", dir, cleanUpErr)
+	}
 }
 
 func getPath(base, p string) (string, error) {
