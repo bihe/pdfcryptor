@@ -1,45 +1,46 @@
-package pdfutil
+package pdfcrypto
 
 import (
+	"bytes"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"os"
+	"os/exec"
 	"path"
 	"path/filepath"
+	"strings"
 
 	"github.com/bihe/pdfcryptor/internal/config"
-	"github.com/bihe/pdfcryptor/internal/utils"
 	homedir "github.com/mitchellh/go-homedir"
 )
 
-// ChangeCrypt will change the password1 of pdf1 to password2 and rename it to pdf2
-func ChangeCrypt(basePath, pdf1, pass1, pdf2, pass2 string, utilType config.PdfUtil) (file string, err error) {
+// ChangePass will change the password1 of pdf1 to password2 and put the result into pdf2
+func ChangePass(basePath, pdf1, pass1, pdf2, pass2 string, utilType config.PdfUtil) (string, error) {
 
-	pdf1, err = getPath(basePath, pdf1)
-	if err != nil {
+	var err error
+
+	if pdf1, err = getPath(basePath, pdf1); err != nil {
 		return "", err
 	}
-	pdf2, err = getPath(basePath, pdf2)
-	if err != nil {
+	if pdf2, err = getPath(basePath, pdf2); err != nil {
 		return "", err
 	}
 
-	file, dir, err := decrypt(pdf1, pass1, utilType)
-	if err != nil {
+	var file, dir string
+
+	if file, dir, err = decrypt(pdf1, pass1, utilType); err != nil {
 		cleanUpErr := os.RemoveAll(dir) // silently clean up
 		if cleanUpErr != nil {
 			fmt.Printf("Could not clean-up dir %s. Error: %s", dir, cleanUpErr)
 		}
 		return "", err
 	}
-	err = encrypt(dir, file, pdf2, pass2, utilType)
-	if err == nil {
+	if err := encrypt(dir, file, pdf2, pass2, utilType); err == nil {
 		// cleanup
-		cleanUpErr := os.RemoveAll(dir)
-		if cleanUpErr != nil {
+		if cleanUpErr := os.RemoveAll(dir); cleanUpErr != nil {
 			fmt.Printf("Could not clean-up dir %s. Error: %s", dir, cleanUpErr)
 		}
-
 		return pdf2, nil
 	}
 	return "", err
@@ -52,9 +53,11 @@ func getPath(base, p string) (string, error) {
 		return p, nil
 	}
 
+	var exP string
+	var err error
+
 	// 1) check if this is a "home-path"
-	exP, err := homedir.Expand(p)
-	if err != nil {
+	if exP, err = homedir.Expand(p); err != nil {
 		return "", err
 	}
 
@@ -75,26 +78,25 @@ func getPath(base, p string) (string, error) {
 
 func decrypt(pdf1, pass1 string, utilType config.PdfUtil) (file, dir string, err error) {
 
-	tmpDir, err := ioutil.TempDir("", "pdfcrypt")
-	if err != nil {
+	var tmpDir string
+	var tmpFile *os.File
+
+	if tmpDir, err = ioutil.TempDir("", "pdfcrypt"); err != nil {
 		return "", "", err
 	}
 
 	// the original file is untouched, create a tempfile and copy the contents into it
-	tmpFile, err := ioutil.TempFile(tmpDir, "*")
-	if err != nil {
+	if tmpFile, err = ioutil.TempFile(tmpDir, "*"); err != nil {
 		return "", "", err
 	}
 	encFile := tmpFile.Name()
 	tmpFile.Close()
 
-	err = utils.CopyFile(pdf1, encFile)
-	if err != nil {
+	if err = copyFile(pdf1, encFile); err != nil {
 		return "", "", err
 	}
 	// additional temp file to hold the decrypted contents
-	tmpFile, err = ioutil.TempFile(tmpDir, "*")
-	if err != nil {
+	if tmpFile, err = ioutil.TempFile(tmpDir, "*"); err != nil {
 		return "", "", err
 	}
 	decFile := tmpFile.Name()
@@ -103,10 +105,10 @@ func decrypt(pdf1, pass1 string, utilType config.PdfUtil) (file, dir string, err
 	switch utilType {
 	case config.QPDF:
 		// qpdf --password=YOURPASSWORD-HERE --decrypt input.pdf output.pdf
-		err = utils.RunCmd(tmpDir, "qpdf", "--password="+pass1, "--decrypt", encFile, decFile)
+		err = runCmd(tmpDir, "qpdf", "--password="+pass1, "--decrypt", encFile, decFile)
 	case config.PDFTK:
 		// pdftk document.pdf input_pw <password> output insecure.pdf
-		err = utils.RunCmd(tmpDir, "pdftk", encFile, "input_pw", pass1, "outupt", decFile)
+		err = runCmd(tmpDir, "pdftk", encFile, "input_pw", pass1, "outupt", decFile)
 	}
 
 	if err != nil {
@@ -123,11 +125,49 @@ func encrypt(tmpDir, pdfDec, pdfDest, pass string, utilType config.PdfUtil) erro
 	switch utilType {
 	case config.QPDF:
 		// qpdf --encrypt <password>  <password> 128 -- doc_without_pass.pdf doc_with_pass.pdf
-		err = utils.RunCmd(tmpDir, "qpdf", "--encrypt", pass, pass, "128", "--use-aes=y", "--", pdfDec, pdfDest)
+		err = runCmd(tmpDir, "qpdf", "--encrypt", pass, pass, "128", "--use-aes=y", "--", pdfDec, pdfDest)
 	case config.PDFTK:
 		// pdftk insecure.pdf output secure.pdf user_pw <password>
-		err = utils.RunCmd(tmpDir, "pdftk", pdfDec, "output", pdfDest, "user_pw", pass)
+		err = runCmd(tmpDir, "pdftk", pdfDec, "output", pdfDest, "user_pw", pass)
 	}
 
 	return err
+}
+
+func copyFile(src, dst string) (err error) {
+	in, err := os.Open(src)
+	if err != nil {
+		return
+	}
+	defer in.Close()
+	out, err := os.Create(dst)
+	if err != nil {
+		return
+	}
+	defer func() {
+		cerr := out.Close()
+		if err == nil {
+			err = cerr
+		}
+	}()
+	if _, err = io.Copy(out, in); err != nil {
+		return
+	}
+	err = out.Sync()
+	return
+}
+
+func runCmd(dir, name string, args ...string) error {
+	// Create the command.
+	var stderr bytes.Buffer
+	cmd := exec.Command(name, args...)
+	cmd.Stderr = &stderr
+	cmd.Dir = dir
+
+	// Start the command and wait for it to exit.
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf(strings.TrimSpace(stderr.String()))
+	}
+
+	return nil
 }

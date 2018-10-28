@@ -1,4 +1,4 @@
-package pdfutil
+package pdfcrypto
 
 import (
 	"fmt"

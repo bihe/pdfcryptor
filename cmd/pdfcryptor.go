@@ -7,7 +7,7 @@ import (
 	"os/exec"
 
 	"github.com/bihe/pdfcryptor/internal/config"
-	"github.com/bihe/pdfcryptor/internal/pdfutil"
+	"github.com/bihe/pdfcryptor/internal/pdfcrypto"
 )
 
 func usage() {
@@ -52,14 +52,14 @@ func main() {
 	flag.Parse()
 
 	if len(*pdf1) > 0 && len(*pdf2) > 0 && len(*pass1) > 0 && len(*pass2) > 0 {
-		util := checkPdfUtility()
+		utilType := checkPdfUtility()
 
 		basePath, err := os.Getwd()
 		if err != nil {
 			exitError(fmt.Sprintf("Could not get the current path. Error: %s", err))
 		}
 
-		file, err := pdfutil.ChangeCrypt(basePath, *pdf1, *pass1, *pdf2, *pass2, util)
+		file, err := pdfcrypto.ChangePass(basePath, *pdf1, *pass1, *pdf2, *pass2, utilType)
 		if err != nil {
 			exitError(fmt.Sprintf("Could not decrypt/encrypt. Error: %s", err))
 		}
