@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-func TestPathExpansiion(t *testing.T) {
+func TestPathExpansion(t *testing.T) {
 	path, err := getPath("/", "~/ABC")
 	fmt.Printf("Got path %s\n", path)
 	if err != nil {
