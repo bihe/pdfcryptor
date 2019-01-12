@@ -85,35 +85,49 @@ func decrypt(pdf1, pass1 string, utilType config.PdfUtil) (file, dir string, err
 	if tmpDir, err = ioutil.TempDir("", "pdfcrypt"); err != nil {
 		return "", "", err
 	}
-
 	// the original file is untouched, create a tempfile and copy the contents into it
 	if tmpFile, err = ioutil.TempFile(tmpDir, "*"); err != nil {
 		return "", "", err
 	}
-	encFile := tmpFile.Name()
-	tmpFile.Close()
 
-	if err = copyFile(pdf1, encFile); err != nil {
-		return "", "", err
-	}
-	// additional temp file to hold the decrypted contents
-	if tmpFile, err = ioutil.TempFile(tmpDir, "*"); err != nil {
-		return "", "", err
-	}
-	decFile := tmpFile.Name()
-	tmpFile.Close()
+	var decFile string
+	if pass1 != "" {
+		encFile := tmpFile.Name()
+		tmpFile.Close()
 
-	switch utilType {
-	case config.QPDF:
-		// qpdf --password=YOURPASSWORD-HERE --decrypt input.pdf output.pdf
-		err = runCmd(tmpDir, "qpdf", "--password="+pass1, "--decrypt", encFile, decFile)
-	case config.PDFTK:
-		// pdftk document.pdf input_pw <password> output insecure.pdf
-		err = runCmd(tmpDir, "pdftk", encFile, "input_pw", pass1, "outupt", decFile)
-	}
+		if err = copyFile(pdf1, encFile); err != nil {
+			return "", "", err
+		}
 
-	if err != nil {
-		return "", "", err
+		// additional temp file to hold the decrypted contents
+		if tmpFile, err = ioutil.TempFile(tmpDir, "*"); err != nil {
+			return "", "", err
+		}
+		decFile = tmpFile.Name()
+		tmpFile.Close()
+
+		switch utilType {
+		case config.QPDF:
+			// qpdf --password=YOURPASSWORD-HERE --decrypt input.pdf output.pdf
+			err = runCmd(tmpDir, "qpdf", "--password="+pass1, "--decrypt", encFile, decFile)
+		case config.PDFTK:
+			// pdftk document.pdf input_pw <password> output insecure.pdf
+			err = runCmd(tmpDir, "pdftk", encFile, "input_pw", pass1, "outupt", decFile)
+		}
+
+		if err != nil {
+			return "", "", err
+		}
+	} else {
+		if tmpFile, err = ioutil.TempFile(tmpDir, "*"); err != nil {
+			return "", "", err
+		}
+		decFile = tmpFile.Name()
+		tmpFile.Close()
+
+		if err = copyFile(pdf1, decFile); err != nil {
+			return "", "", err
+		}
 	}
 
 	return decFile, tmpDir, nil

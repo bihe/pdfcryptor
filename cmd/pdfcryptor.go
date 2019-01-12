@@ -15,10 +15,10 @@ func usage() {
 		"\n"+
 			"pdfcryptor - Utility to change the encryption-password of a given PDF document.\n\n"+
 			"usage: %s\n"+
-			"\t--pdf1=path of origin pdf-document\n"+
-			"\t--pass1=<password of the origin-pdf>\n"+
-			"\t--pdf2=<path of the destination pdf-document>\n"+
-			"\t--pass2=<password of the dest-pdf>\n"+
+			"\t--pdfIn=path of origin pdf-document\n"+
+			"\t[--passIn=<password of the origin-pdf>]\n"+
+			"\t--pdfOut=<path of the destination pdf-document>\n"+
+			"\t--passOut=<password of the dest-pdf>\n"+
 			"\nInfo: The application uses \"qpdf\" or \"pdftk\". If the binary is not available in the path, the application will stop!"+
 			"\n\n",
 		os.Args[0])
@@ -45,13 +45,13 @@ func exitError(errMsg string) {
 }
 
 func main() {
-	pdf1 := flag.String("pdf1", "", "The path of the origin-document.")
-	pass1 := flag.String("pass1", "", "The password of the origin-pdf.")
-	pdf2 := flag.String("pdf2", "", "The path of the destination-document.")
-	pass2 := flag.String("pass2", "", "The password of the destination-pdf.")
+	pdf1 := flag.String("pdfIn", "", "The path of the origin-document.")
+	pass1 := flag.String("passIn", "", "The password of the origin-pdf.")
+	pdf2 := flag.String("pdfOut", "", "The path of the destination-document.")
+	pass2 := flag.String("passOut", "", "The password of the destination-pdf.")
 	flag.Parse()
 
-	if len(*pdf1) > 0 && len(*pdf2) > 0 && len(*pass1) > 0 && len(*pass2) > 0 {
+	if len(*pdf1) > 0 && len(*pdf2) > 0 && len(*pass2) > 0 {
 		utilType := checkPdfUtility()
 
 		basePath, err := os.Getwd()
